@@ -167,7 +167,6 @@ export default function ManageAssets() {
         );
       },
     },
-
     {
       field: "status",
       headerName: "Status",

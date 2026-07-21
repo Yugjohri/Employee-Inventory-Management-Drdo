@@ -153,7 +153,6 @@ export default function MyAssets() {
         );
       },
     },
-
     {
       field: "status",
       headerName: "Status",

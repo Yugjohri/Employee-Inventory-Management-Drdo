@@ -64,7 +64,7 @@ export default function EmployeeDashboard() {
     async function load() {
       setLoading(true);
       try {
-        const rows = await listMyAssignments(user.id);
+        const rows = await listMyAssignments();
         if (isMounted) setAssignments(rows);
       } catch (err) {
         if (isMounted) toast.error(err?.message || "Couldn't load your assets.");

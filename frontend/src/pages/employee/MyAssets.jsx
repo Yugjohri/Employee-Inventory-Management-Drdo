@@ -23,6 +23,7 @@ import Typography from "@mui/material/Typography";
 import SearchIcon from "@mui/icons-material/Search";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
 
 import PageHeader from "../../components/common/PageHeader";
 import DataTable from "../../components/common/DataTable";
@@ -30,7 +31,10 @@ import StatusBadge from "../../components/common/StatusBadge";
 import TwoLineCell from "../../components/common/TwoLineCell";
 import EmptyState from "../../components/common/EmptyState";
 
+import RequestFormDialog from "../../components/requests/RequestFormDialog";
 import { listMyAssignments } from "../../api/assignments";
+import { listCategories } from "../../api/assets";
+import { createRequest } from "../../api/requests";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../context/ToastContext";
 import { useDocumentTitle } from "../../hooks/useDocumentTitle";
@@ -48,6 +52,11 @@ export default function MyAssets() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
 
+  // Raising a request from here rather than only from the Requests page: this
+  // is the screen an employee is looking at when they notice a fault.
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [requestCategories, setRequestCategories] = useState([]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -59,7 +68,7 @@ export default function MyAssets() {
     async function load() {
       setLoading(true);
       try {
-        const rows = await listMyAssignments(user.id);
+        const rows = await listMyAssignments();
         if (isMounted) setAssignments(rows);
       } catch (err) {
         if (isMounted) toast.error(err?.message || "Couldn't load your assets.");
@@ -73,6 +82,24 @@ export default function MyAssets() {
       isMounted = false;
     };
   }, [user?.id, toast]);
+
+  useEffect(() => {
+    listCategories()
+      .then(setRequestCategories)
+      .catch(() => {
+        // Non-fatal: the repair path doesn't need categories.
+      });
+  }, []);
+
+  const handleCreateRequest = async (form) => {
+    await createRequest({
+      requestType: form.requestType,
+      assetId: form.assetId,
+      categoryId: form.categoryId,
+      description: form.description,
+    });
+    toast.success("Request submitted.");
+  };
 
   const categories = useMemo(() => {
     const unique = new Set(
@@ -188,6 +215,9 @@ export default function MyAssets() {
       <PageHeader
         title="My Assets"
         description="Hardware currently assigned to you. This list is view-only."
+        actionLabel="Raise Request"
+        actionIcon={<BuildOutlinedIcon />}
+        onAction={() => setRequestOpen(true)}
       />
 
       <Card sx={{ mb: 3 }}>
@@ -240,6 +270,14 @@ export default function MyAssets() {
             }
           />
         }
+      />
+
+      <RequestFormDialog
+        open={requestOpen}
+        onClose={() => setRequestOpen(false)}
+        onSubmit={handleCreateRequest}
+        myAssets={assignments}
+        categories={requestCategories}
       />
     </Box>
   );

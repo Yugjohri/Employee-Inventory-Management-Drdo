@@ -4,26 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="theme-color" content="#1E293B" />
+    <link rel="icon" type="image/png" href="/drdo-logo.png" />
+    <meta name="theme-color" content="#0D2B4E" />
     <meta
       name="description"
-      content="AssetTrack — internal hardware inventory and assignment tracking."
+      content="Employee Inventory Management — internal hardware inventory and assignment records."
     />
 
     <!--
-      Inter, with a system-font fallback in theme.js if this doesn't load
-      (offline demos, restricted networks). preconnect shaves a round trip.
+      No web fonts. This application runs on an intranet with no internet
+      access, where a remote stylesheet is a request that simply hangs and
+      then fails. theme.js uses a system font stack instead, which needs no
+      network at all and renders as Segoe UI on Windows.
     -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
 
     <!-- Per-page titles are set by useDocumentTitle(); this is the fallback. -->
-    <title>AssetTrack — Hardware Inventory Management</title>
+    <title>Employee Inventory Management</title>
   </head>
   <body>
     <div id="root"></div>

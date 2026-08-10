@@ -7,6 +7,11 @@
  *
  * Recharts needs a parent with a real height, hence the fixed-height Box
  * around each ResponsiveContainer.
+ *
+ * Entry animations are switched off deliberately. Under React StrictMode the
+ * double-mount can leave Recharts 3 stuck on the first animation frame, which
+ * draws the pie and the bars at zero size — a chart that silently renders
+ * blank. Static charts also suit a records dashboard better than motion does.
  */
 
 import { useMemo } from "react";
@@ -61,7 +66,7 @@ const tooltipStyle = {
   borderRadius: 8,
   border: `1px solid ${colors.border}`,
   fontSize: 13,
-  boxShadow: "0 8px 24px rgba(15,23,42,0.1)",
+  boxShadow: "0 8px 24px rgba(15,31,51,0.12)",
 };
 
 export function AssetsByCategoryChart({ assets = [], loading = false }) {
@@ -93,6 +98,7 @@ export function AssetsByCategoryChart({ assets = [], loading = false }) {
             outerRadius={95}
             paddingAngle={2}
             stroke="none"
+            isAnimationActive={false}
           >
             {data.map((entry, index) => (
               <Cell key={entry.name} fill={chartPalette[index % chartPalette.length]} />
@@ -148,9 +154,15 @@ export function AssetsByStatusChart({ assets = [], loading = false }) {
           />
           <RechartsTooltip
             contentStyle={tooltipStyle}
-            cursor={{ fill: "rgba(79, 70, 229, 0.06)" }}
+            cursor={{ fill: "rgba(20, 72, 127, 0.06)" }}
           />
-          <Bar dataKey="value" name="Assets" radius={[6, 6, 0, 0]} maxBarSize={64}>
+          <Bar
+            dataKey="value"
+            name="Assets"
+            radius={[6, 6, 0, 0]}
+            maxBarSize={64}
+            isAnimationActive={false}
+          >
             {data.map((entry) => (
               <Cell key={entry.name} fill={entry.fill} />
             ))}

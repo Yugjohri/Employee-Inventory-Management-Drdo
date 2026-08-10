@@ -77,7 +77,7 @@ export default function Profile() {
           <Grid container spacing={2.5}>
             <InfoRow label="Full Name" value={user?.name} />
             <InfoRow label="Email" value={user?.email} />
-            <InfoRow label="Department" value={user?.department} />
+            <InfoRow label="Group" value={user?.group_name} />
             <InfoRow label="Role" value={user?.role} />
           </Grid>
         </CardContent>

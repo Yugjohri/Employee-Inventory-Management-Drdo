@@ -1,47 +1,54 @@
 /**
- * Employee (profile) queries.
+ * Employee queries.
  *
- * Note there is no create() here. Accounts are created in Supabase Auth --
- * signing someone up requires the auth admin API and a service_role key,
- * which must never reach the browser. The app manages the *profile* half:
- * name, department, role and the active toggle.
+ * Accounts can now be created from inside the app. Under Supabase this needed
+ * the service_role key, which could never ship to a browser; the API hashes
+ * the password server-side instead, so nothing privileged reaches the client.
+ *
+ * Which employees come back is decided by the server: admins see everyone,
+ * coordinators see their own group, employees see only themselves.
  */
 
-import { supabase } from "./supabaseClient";
+import { api } from "./client";
 
-const PROFILE_SELECT = "id, name, email, role, department, is_active, created_at";
-
-export async function listProfiles() {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(PROFILE_SELECT)
-    .order("name", { ascending: true });
-
-  if (error) throw error;
-  return data || [];
+export async function listEmployees() {
+  return api.get("/employees");
 }
 
-/** Active employees only -- powers the Assign Asset dropdown. */
+/** Active employees eligible to receive an asset — the assign dropdown. */
 export async function listAssignableEmployees() {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, name, email, department")
-    .eq("is_active", true)
-    .eq("role", "employee")
-    .order("name", { ascending: true });
-
-  if (error) throw error;
-  return data || [];
+  return api.get("/employees/assignable");
 }
 
-export async function updateProfile(id, values) {
-  const { data, error } = await supabase
-    .from("profiles")
-    .update(values)
-    .eq("id", id)
-    .select(PROFILE_SELECT)
-    .single();
+export async function getEmployee(id) {
+  return api.get(`/employees/${id}`);
+}
 
-  if (error) throw error;
-  return data;
+export async function createEmployee(values) {
+  return api.post("/employees", values);
+}
+
+export async function updateEmployee(id, values) {
+  return api.put(`/employees/${id}`, values);
+}
+
+/** Resets to the server's configured default when no password is given. */
+export async function resetPassword(id, password) {
+  return api.post(`/employees/${id}/reset-password`, { password });
+}
+
+export async function listGroups() {
+  return api.get("/groups");
+}
+
+export async function listDesignations() {
+  return api.get("/designations");
+}
+
+export async function listCadres() {
+  return api.get("/cadres");
+}
+
+export async function listInternalDesignations() {
+  return api.get("/internal-designations");
 }

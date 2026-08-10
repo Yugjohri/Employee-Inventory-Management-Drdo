@@ -22,10 +22,14 @@ import Button from "@mui/material/Button";
 import Alert from "@mui/material/Alert";
 import Skeleton from "@mui/material/Skeleton";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
 import MemoryOutlinedIcon from "@mui/icons-material/MemoryOutlined";
 
 import StatusBadge from "../../components/common/StatusBadge";
+import RequestFormDialog from "../../components/requests/RequestFormDialog";
 import { getAssignment } from "../../api/assignments";
+import { createRequest } from "../../api/requests";
+import { useToast } from "../../context/ToastContext";
 import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 import { formatDate, daysUntil, isExpired, isExpiringSoon, EMPTY } from "../../utils/formatters";
 import { warrantyColors, getStatusStyle } from "../../theme/theme";
@@ -47,9 +51,12 @@ export default function AssetDetails() {
   const { assignmentId } = useParams();
   const navigate = useNavigate();
 
+  const toast = useToast();
+
   const [assignment, setAssignment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [requestOpen, setRequestOpen] = useState(false);
 
   const asset = assignment?.asset || {};
   useDocumentTitle(asset.name ? `${asset.asset_tag} — ${asset.name}` : "Asset Details");
@@ -108,12 +115,37 @@ export default function AssetDetails() {
         Back to My Assets
       </Button>
 
-      <Typography variant="h5" sx={{ mb: 0.5 }}>
-        Asset Details
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Read-only information about this asset.
-      </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: { xs: "stretch", sm: "flex-start" },
+          justifyContent: "space-between",
+          flexDirection: { xs: "column", sm: "row" },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Box>
+          <Typography variant="h5" sx={{ mb: 0.5 }}>
+            Asset Details
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Read-only information about this asset.
+          </Typography>
+        </Box>
+
+        {/* Only offer a repair request for something they still hold. */}
+        {assignment?.status === "active" && (
+          <Button
+            variant="contained"
+            startIcon={<BuildOutlinedIcon />}
+            onClick={() => setRequestOpen(true)}
+            sx={{ flexShrink: 0, alignSelf: { xs: "flex-start", sm: "auto" } }}
+          >
+            Request Repair
+          </Button>
+        )}
+      </Box>
 
       {error && <Alert severity="error">{error}</Alert>}
 
@@ -211,6 +243,24 @@ export default function AssetDetails() {
             </Grid>
           </CardContent>
         </Card>
+      )}
+
+      {assignment && (
+        <RequestFormDialog
+          open={requestOpen}
+          onClose={() => setRequestOpen(false)}
+          onSubmit={async (form) => {
+            await createRequest({
+              requestType: form.requestType,
+              assetId: form.assetId,
+              categoryId: form.categoryId,
+              description: form.description,
+            });
+            toast.success("Repair request submitted.");
+          }}
+          myAssets={[assignment]}
+          categories={[]}
+        />
       )}
     </Box>
   );

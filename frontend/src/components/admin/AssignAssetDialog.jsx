@@ -153,8 +153,8 @@ export default function AssignAssetDialog({ open, onClose, onSubmit }) {
                         <Typography variant="body2" fontWeight={600}>
                           {employee.name || employee.email}
                         </Typography>
-                        {employee.department && (
-                          <Typography variant="caption">{employee.department}</Typography>
+                        {employee.group_name && (
+                          <Typography variant="caption">{employee.group_name}</Typography>
                         )}
                       </Box>
                     </MenuItem>

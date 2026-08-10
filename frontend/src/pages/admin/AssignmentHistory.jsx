@@ -7,7 +7,7 @@
  *
  * Returning goes through the return_assignment() Postgres function so the
  * assignment and the asset's status change together. See
- * backend/supabase/functions.sql.
+ * backend/sql/01_schema.sql.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";

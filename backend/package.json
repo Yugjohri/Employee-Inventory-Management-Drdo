@@ -3,13 +3,16 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Employee Inventory Management API — Express + PostgreSQL, runs fully offline.",
+  "description": "Employee Inventory Management API \u2014 Express + PostgreSQL, runs fully offline.",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "db:start": "node scripts/db.js start",
+    "db:stop": "node scripts/db.js stop",
+    "db:status": "node scripts/db.js status",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "setup": "npm run migrate && npm run seed",

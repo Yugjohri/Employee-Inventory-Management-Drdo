@@ -40,16 +40,41 @@ that has already run it — see [Installing without internet](#installing-withou
 [PostgreSQL](https://www.postgresql.org/download/) 14+.
 Check with `node -v` and `psql --version`.
 
-> **No PostgreSQL installed?** If you have Docker, this gets you one on the
-> standard port without installing anything:
->
-> ```bash
-> docker run -d --name eims-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16-alpine
-> ```
->
-> The defaults in `.env.example` already point at it. Once the image is on the
-> machine, this works offline too. Stop it with `docker stop eims-pg`, start it
-> again with `docker start eims-pg`.
+There are two ways to get PostgreSQL, depending on whether you have
+administrator rights on the machine.
+
+**A. Normal install (recommended)** — <https://www.postgresql.org/download/windows/>
+Run the installer, and when it asks for a superuser password, remember what you
+type: that goes in `ADMIN_PGPASSWORD` in `.env`. PostgreSQL then runs as a
+Windows service and starts automatically with the machine, so there is nothing
+to start by hand. Needs administrator rights.
+
+**B. Portable, no installation** — for a machine where you can't install
+software. Download the *binaries zip* (not the installer) from
+<https://www.enterprisedb.com/download-postgresql-binaries>, unzip it anywhere,
+then create the database files once:
+
+```bash
+<unzipped>/pgsql/bin/initdb -D C:/Users/<you>/pgdata -U postgres -W -E UTF8 --locale=C
+```
+
+Put those two paths in `backend/.env`:
+
+```
+PG_BIN=C:/Users/<you>/pgsql/bin
+PG_DATA=C:/Users/<you>/pgdata
+```
+
+and from then on:
+
+```bash
+npm run db:start     # start PostgreSQL
+npm run db:stop      # stop it
+npm run db:status    # is it running?
+```
+
+No administrator rights, no service, no Docker. Everything else below is the
+same either way.
 
 ```bash
 # 1. Backend
@@ -280,7 +305,7 @@ Three ways to change the logins, in increasing order of permanence:
    `backend/scripts/seed.js`, then rebuild the database:
    ```bash
    cd backend
-   psql -U postgres -c "drop database eims"   # or: docker exec eims-pg psql -U postgres -c "drop database eims"
+   psql -U postgres -c "drop database eims"
    npm run setup
    ```
    Re-running `npm run seed` on an existing database only *adds* what's missing;
@@ -332,10 +357,9 @@ intranet.
 
 ### If you stay local
 
-Nothing to do. Docker is a convenience for getting PostgreSQL quickly — the
-application has no dependency on it, and a native PostgreSQL install is
-identical from the app's point of view. Data moves with `pg_dump` /
-`pg_restore` either way.
+Nothing to do. The application talks to PostgreSQL on `localhost:5432` and
+doesn't care how it got there — installed, portable, or anything else. Data
+moves between machines with `pg_dump` / `pg_restore`.
 
 ---
 

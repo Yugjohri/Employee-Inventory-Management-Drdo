@@ -257,3 +257,71 @@ the current design.
 
 If the answer is the first, we would also suggest fixing 3.1–3.4 before the two
 systems share data, since those defects would then affect both.
+
+---
+
+## Appendix — demo accounts
+
+For the demonstration only. These are throwaway accounts on a local database,
+created by `backend/scripts/seed.js`. **They are not real credentials and must
+be changed or removed before any actual deployment** — see §3.3 above for why
+sample passwords left in a repository are a problem worth avoiding.
+
+**Password for every account below:** `drdo@1234`
+
+Application: <http://localhost:4000>
+
+### Administrator — sees every group, and is the only role that can set roles or group placement
+
+| Login | Name | Designation |
+|---|---|---|
+| `admin@company.com` | Sapna Kharwar | Scientist F |
+
+### Group IT Coordinators — manage their own group's staff; read-only on inventory
+
+| Login | Name | Group | Designation |
+|---|---|---|---|
+| `itcoordinator1@company.com` | Priya Nair | AI | Scientist E |
+| `itcoordinator2@company.com` | Anil Deshmukh | NET | Scientist E |
+| `itcoordinator3@company.com` | Meera Iyer | RAD | Scientist E |
+| `itcoordinator4@company.com` | Sanjay Bose | ADM | Administrative Officer |
+
+### Employees — see only their own record and their own assets
+
+| Login | Name | Group | Designation |
+|---|---|---|---|
+| `employee@company.com` | Rahul Sharma | AI | Scientist D |
+| `arjun.pillai@company.com` | Arjun Pillai | AI | Scientist C |
+| `imran.qureshi@company.com` | Imran Qureshi | AI | Scientist D |
+| `kavya.menon@company.com` | Kavya Menon | AI | Scientist C |
+| `neha.gupta@company.com` | Neha Gupta | AI | Technical Officer |
+| `arun.verma@company.com` | Arun Verma | NET | Scientist C |
+| `divya.rangan@company.com` | Divya Rangan | NET | Scientist D |
+| `farhan.ali@company.com` | Farhan Ali | NET | Technical Officer |
+| `sneha.kulkarni@company.com` | Sneha Kulkarni | NET | Scientist C |
+| `ananya.das@company.com` | Ananya Das | RAD | Scientist C |
+| `pooja.shetty@company.com` | Pooja Shetty | RAD | Scientist D |
+| `rohit.chandra@company.com` | Rohit Chandra | RAD | Scientist D |
+| `vivek.raman@company.com` | Vivek Raman | RAD | Technical Officer |
+| `geeta.rane@company.com` | Geeta Rane | ADM | Administrative Officer |
+| `manoj.tiwari@company.com` | Manoj Tiwari | ADM | Administrative Officer |
+| `leela.krishnan@company.com` | Leela Krishnan | ADM | Administrative Officer |
+
+**21 accounts** — 1 administrator, 4 coordinators, 16 employees across 4 groups,
+holding 28 assets between them.
+
+### Suggested demonstration of the access rules
+
+1. Sign in as `itcoordinator1@company.com` (Priya, AI) → **Group Employees**.
+   She sees her five AI staff, the administrator, and the other three
+   coordinators. Edit and password-reset buttons appear **only** on her own
+   group's employees.
+2. Sign in as `itcoordinator2@company.com` (Anil, NET) → the same page now shows
+   NET staff instead. Neither coordinator can see the other's employees.
+3. Sign in as `admin@company.com` → all 21, every group, with the **IT
+   Coordinator** column and filter showing who reports to whom.
+4. Run `npm test` in `backend/` → 21 tests, including a coordinator attempting to
+   read another group's record by its ID and being refused by the database.
+
+Step 4 is the one that matters: it demonstrates the restriction rather than
+asserting it.

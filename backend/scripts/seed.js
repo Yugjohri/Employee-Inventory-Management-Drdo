@@ -45,7 +45,7 @@ const password = process.env.DEFAULT_PASSWORD || "drdo@1234";
  */
 const PEOPLE = [
   // ---- Administrator: sees everything, everywhere -------------------------
-  { username: "admin@company.com", first: "Vikram", last: "Rao",
+  { username: "admin@company.com", first: "Sapna", last: "Kharwar",
     role: "admin", group: null, desig: "SF", internal: "PD" },
 
   // ---- Group IT Coordinators: one per group, view-only within it ---------

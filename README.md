@@ -76,42 +76,53 @@ npm run db:status    # is it running?
 No administrator rights, no service, no Docker. Everything else below is the
 same either way.
 
+**1. Build the frontend.** Do this before starting the backend — the backend
+serves the built files and only looks for them at start-up.
+
 ```bash
-# 1. Backend
-cd backend
+cd frontend
+npm ci
+npm run build
+```
+
+**2. Configure the backend.**
+
+```bash
+cd ../backend
 npm ci
 cp .env.example .env          # Windows: copy .env.example .env
 ```
 
-Open `backend/.env` and set at minimum:
+Open `backend/.env` and set **one** value — the superuser password you chose
+when installing PostgreSQL:
 
 ```
 ADMIN_PGPASSWORD=<your postgres superuser password>
-PGPASSWORD=<any password you choose for the app's database login>
-JWT_SECRET=<a long random string>
 ```
 
-Generate a secret with:
+Everything else in the file already works as-is. For a real deployment (rather
+than a demo) also change `PGPASSWORD` and `JWT_SECRET`; generate a secret with:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
-Then:
+**3. Create the database and start.**
 
 ```bash
 npm run setup                 # creates the database, applies the schema, seeds demo data
-npm start                     # API on http://localhost:4000
+npm start
 ```
 
-```bash
-# 2. Frontend (in a second terminal)
-cd frontend
-npm ci
-npm run dev                   # http://localhost:5173
-```
+**4. Open <http://localhost:4000>** and sign in.
 
-Open the printed URL and sign in.
+That is one process serving both the API and the application — nothing else to
+start. Afterwards, `npm start` from `backend/` is all that's needed.
+
+> **Developing rather than demonstrating?** Run `npm run dev` in `frontend/`
+> instead of `npm run build`. That starts Vite on <http://localhost:5173> with
+> hot reload and proxies `/api` to the backend, so you need both terminals and
+> should open 5173. The single-process route above is simpler for a demo.
 
 ### Demo logins
 
@@ -130,8 +141,8 @@ All accounts use the password from `DEFAULT_PASSWORD` in `backend/.env`
 Every other employee also has a login of the form `first.last@company.com` —
 see `PEOPLE` in `backend/scripts/seed.js` for the full list.
 
-The seeded organisation is 4 groups, 4 coordinators and 17 employees, with
-28 assets and a mix of open and resolved requests.
+The seeded organisation is 4 groups, 4 coordinators and 16 employees (21
+accounts in total), with 28 assets and a mix of open and resolved requests.
 
 To see the access rules working, sign in as `itcoordinator1@company.com`, then
 as `itcoordinator2@company.com`: each sees their own group's staff and nobody

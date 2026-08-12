@@ -16,14 +16,12 @@ services:
     # Singapore is Render's closest region to India.
     region: singapore
 
-    # The backend serves the built frontend, so the frontend must be built
-    # first — the server only looks for frontend/dist at start-up.
-    buildCommand: cd frontend && npm ci && npm run build && cd ../backend && npm ci
-
-    # `npm run setup` applies the schema and seeds the demo data. Both are
-    # idempotent, so running them on every boot is safe: the first deploy
-    # creates everything, later ones confirm it's all still there.
-    startCommand: cd backend && npm run setup && npm start
+    # Both defined in the root package.json. Build installs and builds the
+    # frontend (which must happen before the backend starts, since the backend
+    # serves frontend/dist), then installs the backend. Start applies the
+    # schema, seeds the demo data — both idempotent — and runs the server.
+    buildCommand: npm run build
+    startCommand: npm start
 
     healthCheckPath: /api/health
 
@@ -34,15 +32,15 @@ services:
           name: employee-inventory-db
           property: connectionString
 
-      # The API deliberately does NOT connect with the DATABASE_URL user.
-      # That user owns the tables, and PostgreSQL exempts a table's owner from
-      # its own row-level security — connecting as it would silently disable
-      # every access rule. So we connect as `eims_app`, which owns nothing.
-      # See backend/src/dbConfig.js.
-      - key: PGUSER
-        value: eims_app
-      - key: PGPASSWORD
-        generateValue: true
+      # Note there is deliberately no PGUSER here.
+      #
+      # Locally the API connects as a separate unprivileged role, `eims_app`,
+      # so that PostgreSQL's row-level security applies to it — an owner is
+      # exempt from its own policies. A managed database won't let us create
+      # that role, so here the API connects as the DATABASE_URL user and the
+      # schema instead marks every table FORCE ROW LEVEL SECURITY, which makes
+      # the policies apply to the owner as well. Both routes end up enforced;
+      # see backend/src/dbConfig.js.
 
       # Signs the session cookie. Generated once by Render and kept secret.
       - key: JWT_SECRET

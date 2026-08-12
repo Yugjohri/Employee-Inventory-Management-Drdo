@@ -82,7 +82,7 @@ if (runDirectly) {
     try {
       const check = await assertSecurityRulesApply();
       if (check.ok) {
-        console.log(`[api] database connected as "${check.who}" — access rules apply`);
+        console.log(`[api] database connected as "${check.who}" (${check.how}) — access rules apply`);
       } else {
         console.error(
           [

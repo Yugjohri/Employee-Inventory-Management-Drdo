@@ -150,15 +150,11 @@ const REQUESTS = [
   { from: "divya.rangan@company.com",   type: "new_asset", category: "Peripheral", text: "Cable tester for rack commissioning work.", status: "rejected" },
 ];
 
-const client = new pg.Client({
-  host: process.env.PGHOST || "localhost",
-  port: Number(process.env.PGPORT || 5432),
-  database: process.env.PGDATABASE || "eims",
-  // Seeding writes directly, which RLS would block for a non-admin session —
-  // so it runs as the owner, like migrate does.
-  user: process.env.ADMIN_PGUSER || "postgres",
-  password: process.env.ADMIN_PGPASSWORD || "postgres",
-});
+// Seeding writes people and hardware directly, so it connects as the owner,
+// exactly like migrate — locally that's ADMIN_PGUSER, on a hosted database it's
+// whoever DATABASE_URL names. It also announces itself as an admin below,
+// because the access policies apply to this connection too.
+const client = new pg.Client(ownerConnection());
 
 /** id lookup for the small reference tables. */
 async function lookupId(table, column, value) {

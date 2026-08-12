@@ -38,11 +38,23 @@
 -- connecting as the owner would silently disable every policy below.
 -- =============================================================================
 
+-- On a managed database (Render, Neon, Supabase, Railway) the login you are
+-- given cannot create roles. That is fine: section 7 marks every table FORCE
+-- ROW LEVEL SECURITY, which makes the policies apply to the table owner too,
+-- so the separate role is an optimisation rather than a requirement. Skip it
+-- quietly rather than failing the whole migration.
 do $$
 begin
   if not exists (select 1 from pg_roles where rolname = 'eims_app') then
-    -- Password is overridden by 02_seed.sql / your own ALTER ROLE. Change it.
-    create role eims_app login password 'change-me-in-production';
+    begin
+      -- Password is replaced by `npm run migrate`. Change it.
+      create role eims_app login password 'change-me-in-production';
+    exception when insufficient_privilege then
+      raise notice
+        'Could not create role eims_app (no permission). The API will connect '
+        'as the database owner instead; FORCE ROW LEVEL SECURITY keeps the '
+        'access rules in effect.';
+    end;
   end if;
 end
 $$;
@@ -360,18 +372,29 @@ returns table (
   id uuid, username text, email text, role text, group_id uuid,
   is_active boolean, password_hash text, name text, group_name text
 )
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
-  select e.id, e.username, e.email, e.role, e.group_id,
-         e.is_active, e.password_hash,
-         public.employee_full_name(e.first_name, e.middle_name, e.last_name),
-         g.full_name
-    from public.employees e
-    left join public.groups g on g.id = e.group_id
-   where lower(e.username) = lower(p_username);
+begin
+  -- Announce which username is being resolved. The "employees: login lookup"
+  -- policy honours exactly this one row, which is the minimum a login needs:
+  -- the caller already supplied the name, so nothing is revealed that they
+  -- didn't already name. Transaction-local, and cleared again below.
+  perform set_config('app.login_username', lower(p_username), true);
+
+  return query
+    select e.id, e.username, e.email, e.role, e.group_id,
+           e.is_active, e.password_hash,
+           public.employee_full_name(e.first_name, e.middle_name, e.last_name),
+           g.full_name
+      from public.employees e
+      left join public.groups g on g.id = e.group_id
+     where lower(e.username) = lower(p_username);
+
+  perform set_config('app.login_username', '', true);
+end;
 $$;
 
 -- Resolving a session cookie to a user. Deliberately excludes password_hash —
@@ -381,17 +404,25 @@ returns table (
   id uuid, username text, email text, role text, group_id uuid,
   is_active boolean, name text, group_name text
 )
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
-  select e.id, e.username, e.email, e.role, e.group_id, e.is_active,
-         public.employee_full_name(e.first_name, e.middle_name, e.last_name),
-         g.full_name
-    from public.employees e
-    left join public.groups g on g.id = e.group_id
-   where e.id = p_id;
+begin
+  -- The id comes from a verified session cookie, so it IS the caller's
+  -- identity. Stating it lets the ordinary "everyone can read their own row"
+  -- rule apply, rather than needing an exemption.
+  perform set_config('app.user_id', p_id::text, true);
+
+  return query
+    select e.id, e.username, e.email, e.role, e.group_id, e.is_active,
+           public.employee_full_name(e.first_name, e.middle_name, e.last_name),
+           g.full_name
+      from public.employees e
+      left join public.groups g on g.id = e.group_id
+     where e.id = p_id;
+end;
 $$;
 
 
@@ -422,15 +453,28 @@ $$;
 --   employee              read-only, restricted to themselves (+ own requests)
 -- =============================================================================
 
-alter table public.groups                enable row level security;
-alter table public.cadres                enable row level security;
-alter table public.designations          enable row level security;
-alter table public.internal_designations enable row level security;
-alter table public.employees             enable row level security;
-alter table public.asset_categories      enable row level security;
-alter table public.assets                enable row level security;
-alter table public.assignments           enable row level security;
-alter table public.asset_requests        enable row level security;
+-- ENABLE turns the policies on. FORCE additionally applies them to the table's
+-- OWNER, who would otherwise be exempt.
+--
+-- FORCE is what makes a managed database safe. Render, Neon and Supabase hand
+-- you a login that owns the tables and won't let you create another one, so
+-- without FORCE the API would connect as the owner, every policy would be
+-- skipped, and the application would look completely normal while a
+-- coordinator could read every group. With FORCE the rules hold either way.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'groups','cadres','designations','internal_designations','employees',
+    'asset_categories','assets','assignments','asset_requests'
+  ]
+  loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('alter table public.%I force row level security', t);
+  end loop;
+end
+$$;
 
 
 -- ---------- lookup tables ---------------------------------------------------
@@ -489,6 +533,14 @@ create policy "employees: read scoped"
       )
     )
   );
+
+-- Signing in has to read one row before anyone is identified. Rather than
+-- exempting the owner (FORCE deliberately prevents that), login_lookup names
+-- the username it is resolving and this policy honours that single row.
+drop policy if exists "employees: login lookup" on public.employees;
+create policy "employees: login lookup"
+  on public.employees for select
+  using (lower(username) = nullif(current_setting('app.login_username', true), ''));
 
 create policy "employees: admin writes"
   on public.employees for all
@@ -825,19 +877,22 @@ $$;
 -- every policy above applies to it. It cannot create, alter or drop anything.
 -- =============================================================================
 
-grant usage on schema public to eims_app;
+-- Only meaningful when the role exists — on a managed database it could not be
+-- created (see section 1), and the API connects as the owner instead.
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'eims_app') then
+    return;
+  end if;
 
-grant select, insert, update, delete on all tables in schema public to eims_app;
-grant execute on all functions in schema public to eims_app;
+  grant usage on schema public to eims_app;
+  grant select, insert, update, delete on all tables in schema public to eims_app;
+  grant execute on all functions in schema public to eims_app;
 
--- Same rights for anything added by a later migration.
-alter default privileges in schema public
-  grant select, insert, update, delete on tables to eims_app;
-alter default privileges in schema public
-  grant execute on functions to eims_app;
-
--- The functions the API must always be able to call, including before anyone
--- is authenticated.
-grant execute on function public.set_app_user(uuid, text, uuid) to eims_app;
-grant execute on function public.login_lookup(text) to eims_app;
-grant execute on function public.session_lookup(uuid) to eims_app;
+  -- Same rights for anything added by a later migration.
+  alter default privileges in schema public
+    grant select, insert, update, delete on tables to eims_app;
+  alter default privileges in schema public
+    grant execute on functions to eims_app;
+end
+$$;

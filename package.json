@@ -1,0 +1,25 @@
+{
+  "name": "employee-inventory-management",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Employee Inventory Management — root scripts for building and running both halves together.",
+  "engines": {
+    "node": ">=18"
+  },
+  "comment": [
+    "This file exists mainly so hosting providers detect a Node project at the",
+    "repository root. Without a package.json here, Render's build container has",
+    "no Node toolchain on PATH and the build dies with 'command not found'",
+    "(exit status 127) before it reaches frontend/ or backend/.",
+    "",
+    "It also gives one command for the whole system, which is easier to get",
+    "right than a chain of cd's: the frontend must be built before the backend",
+    "starts, because the backend serves frontend/dist and only looks for it at",
+    "start-up."
+  ],
+  "scripts": {
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build && npm --prefix backend ci",
+    "start": "npm --prefix backend run setup && npm --prefix backend start",
+    "test": "npm --prefix backend test"
+  }
+}

@@ -45,7 +45,9 @@ export async function assertSecurityRulesApply() {
   const { rows } = await pool.query(`
     select current_user as who,
            (select rolbypassrls from pg_roles where rolname = current_user) as bypasses,
-           pg_catalog.pg_get_userbyid(c.relowner) = current_user as owns_employees
+           pg_catalog.pg_get_userbyid(c.relowner) = current_user as owns_employees,
+           c.relrowsecurity  as rls_enabled,
+           c.relforcerowsecurity as rls_forced
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
      where n.nspname = 'public' and c.relname = 'employees'
@@ -53,10 +55,23 @@ export async function assertSecurityRulesApply() {
 
   const state = rows[0];
   if (!state) return { ok: false, reason: "the employees table is missing — run npm run setup" };
-  if (state.bypasses) return { ok: false, reason: `"${state.who}" has BYPASSRLS` };
-  if (state.owns_employees) return { ok: false, reason: `"${state.who}" owns the tables` };
 
-  return { ok: true, who: state.who };
+  // BYPASSRLS skips policies unconditionally; nothing rescues that.
+  if (state.bypasses) return { ok: false, reason: `"${state.who}" has BYPASSRLS` };
+
+  if (!state.rls_enabled) return { ok: false, reason: "row-level security is switched off" };
+
+  // Owning the tables is only a problem without FORCE, which is what removes
+  // the owner's exemption. Hosted deployments rely on exactly that.
+  if (state.owns_employees && !state.rls_forced) {
+    return { ok: false, reason: `"${state.who}" owns the tables and FORCE is not set` };
+  }
+
+  return {
+    ok: true,
+    who: state.who,
+    how: state.owns_employees ? "owner, with FORCE" : "unprivileged role",
+  };
 }
 
 /**

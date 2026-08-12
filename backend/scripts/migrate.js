@@ -53,6 +53,51 @@ async function ensureDatabase() {
   }
 }
 
+/**
+ * Give the unprivileged `eims_app` role the password the API will use.
+ *
+ * Optional by design. A managed database won't let us create or alter roles, so
+ * there is nothing to set — the API connects as the owner there, and FORCE ROW
+ * LEVEL SECURITY in 01_schema.sql keeps the access rules in effect either way.
+ * Warn and carry on rather than failing the deployment.
+ */
+async function setAppRolePassword(client) {
+  const { rows } = await client.query("select 1 from pg_roles where rolname = $1", [appUser]);
+
+  if (rows.length === 0) {
+    console.log(
+      `[migrate] role "${appUser}" doesn't exist — the API will connect as the ` +
+        "database owner, with FORCE row-level security applying the same rules"
+    );
+    return;
+  }
+
+  if (!appPassword) {
+    console.warn("[migrate] PGPASSWORD is empty — set one in .env before deploying.");
+    return;
+  }
+
+  try {
+    // ALTER ROLE is a utility statement, so it takes no bind parameters.
+    // escapeIdentifier/escapeLiteral do the quoting that $1 would normally
+    // have handled.
+    await client.query(
+      `alter role ${client.escapeIdentifier(appUser)} ` +
+        `with password ${client.escapeLiteral(appPassword)}`
+    );
+    console.log(`[migrate] set password for role "${appUser}"`);
+  } catch (error) {
+    if (error.code === "42501") {
+      console.log(
+        `[migrate] not permitted to alter role "${appUser}" — connecting as the ` +
+          "database owner instead, which FORCE row-level security still covers"
+      );
+      return;
+    }
+    throw error;
+  }
+}
+
 async function applySqlFiles() {
   const client = new pg.Client(ownerConnection());
   await client.connect();
@@ -73,18 +118,7 @@ async function applySqlFiles() {
       }
     }
 
-    if (!appPassword) {
-      console.warn("[migrate] PGPASSWORD is empty — set one in .env before deploying.");
-    } else {
-      // ALTER ROLE is a utility statement, so it takes no bind parameters.
-      // escapeIdentifier/escapeLiteral do the quoting that $1 would normally
-      // have handled.
-      await client.query(
-        `alter role ${client.escapeIdentifier(appUser)} ` +
-          `with password ${client.escapeLiteral(appPassword)}`
-      );
-      console.log(`[migrate] set password for role "${appUser}"`);
-    }
+    await setAppRolePassword(client);
   } finally {
     await client.end();
   }

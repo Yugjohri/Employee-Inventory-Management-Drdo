@@ -35,13 +35,32 @@ export const usingDatabaseUrl = Boolean(process.env.DATABASE_URL);
  */
 const managedSsl = { rejectUnauthorized: false };
 
-/** Connection for the API: the unprivileged role, always. */
+/**
+ * Connection for the API.
+ *
+ * With a DATABASE_URL, PGUSER decides which of two safe arrangements applies:
+ *
+ *   PGUSER set    connect as that unprivileged role — it owns nothing, so the
+ *                 policies apply to it normally. Preferred where we're allowed
+ *                 to create roles.
+ *   PGUSER unset  connect as the DATABASE_URL user, which owns the tables.
+ *                 Safe only because 01_schema.sql marks every table FORCE ROW
+ *                 LEVEL SECURITY, which removes the owner's exemption. Managed
+ *                 databases don't let us create roles, so this is their path.
+ *
+ * Read straight from process.env rather than config.db, which defaults PGUSER
+ * to "eims_app" — a default that would be wrong here, because on a managed
+ * database that role does not exist and the connection would simply fail.
+ */
 export function appConnection() {
   if (!usingDatabaseUrl) return { ...config.db };
 
   const url = new URL(process.env.DATABASE_URL);
-  url.username = encodeURIComponent(config.db.user);
-  url.password = encodeURIComponent(config.db.password);
+
+  if (process.env.PGUSER) {
+    url.username = encodeURIComponent(process.env.PGUSER);
+    url.password = encodeURIComponent(process.env.PGPASSWORD || "");
+  }
 
   return { connectionString: url.toString(), ssl: managedSsl };
 }

@@ -42,7 +42,21 @@ authRoutes.post(
     }
 
     issueSession(res, user);
-    res.json({ user: publicUser(user) });
+
+    // Read the profile back through session_lookup rather than returning what
+    // login_lookup found.
+    //
+    // login_lookup necessarily runs before anyone is identified, so its join to
+    // `groups` sees nothing on a deployment where the connecting user isn't
+    // exempt from row-level security — a coordinator would sign in with a blank
+    // group name until the next page load. session_lookup states the id first,
+    // so the ordinary rules let it read the group. It also guarantees this
+    // response and /auth/me are identical by construction.
+    const { rows: profile } = await pool.query("select * from public.session_lookup($1)", [
+      user.id,
+    ]);
+
+    res.json({ user: publicUser(profile[0] || user) });
   })
 );
 

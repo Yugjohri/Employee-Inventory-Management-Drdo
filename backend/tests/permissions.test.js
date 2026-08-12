@@ -71,6 +71,33 @@ const COORD_AI = "itcoordinator1@company.com";
 const COORD_NET = "itcoordinator2@company.com";
 const EMPLOYEE_AI = "employee@company.com";
 
+describe("signing in returns a complete profile", () => {
+  // This was missed once: login_lookup runs before anyone is identified, so on
+  // a deployment where the connecting user isn't exempt from row-level
+  // security its join to `groups` returned nothing, and a coordinator signed
+  // in with a blank group name. It only showed up in the hosted environment,
+  // because locally the function owner has BYPASSRLS and never noticed.
+  test("a coordinator's group is named at login, not just afterwards", async () => {
+    const coordinator = await signIn(COORD_AI);
+
+    assert.ok(coordinator.user.group_id, "login must return the group id");
+    assert.ok(
+      coordinator.user.group_name,
+      "login must return the group NAME — the sidebar shows it immediately"
+    );
+
+    // And it must agree with what /auth/me reports.
+    const { body } = await coordinator.call("/auth/me");
+    assert.equal(body.user.group_name, coordinator.user.group_name);
+  });
+
+  test("an admin has no group, and says so cleanly", async () => {
+    const admin = await signIn(ADMIN);
+    assert.equal(admin.user.group_id, null);
+    assert.equal(admin.user.group_name, null);
+  });
+});
+
 describe("visibility is scoped by role", () => {
   test("admin sees the whole organisation", async () => {
     const admin = await signIn(ADMIN);

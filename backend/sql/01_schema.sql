@@ -555,6 +555,13 @@ create policy "employees: admin writes"
 -- promote themselves or quietly pull another group's employee into their own.
 -- The INSERT check below pins new rows to role 'employee' in their own group;
 -- the trigger further down pins the same fields on UPDATE.
+-- Each CREATE POLICY is preceded by its own DROP. PostgreSQL has no
+-- CREATE POLICY IF NOT EXISTS, so re-applying this file to a database that
+-- already has it fails with "policy already exists" — and this file is
+-- re-applied on every deployment. Keeping the drop next to the create makes
+-- the pair hard to separate; grouping them elsewhere is how these two came to
+-- be added without one.
+drop policy if exists "employees: coordinator adds to own group" on public.employees;
 create policy "employees: coordinator adds to own group"
   on public.employees for insert
   with check (
@@ -563,6 +570,7 @@ create policy "employees: coordinator adds to own group"
     and role = 'employee'
   );
 
+drop policy if exists "employees: coordinator updates own group" on public.employees;
 create policy "employees: coordinator updates own group"
   on public.employees for update
   using (

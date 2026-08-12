@@ -296,6 +296,70 @@ npm run dev        # API with auto-restart on change
 
 ---
 
+## Loading existing records in bulk
+
+Nobody should type in a filing cabinet. Existing paper records are usually
+already in a spreadsheet, or can be got into one far faster than they can be
+typed into a web form — so the system imports CSV.
+
+```bash
+cd backend
+npm run import -- employees data/staff.csv
+npm run import -- assets    data/hardware.csv
+```
+
+Column templates are in `backend/templates/`. Open one in Excel, replace the
+sample rows with real data, and save as CSV.
+
+**Check before you commit to it.** `--dry-run` validates the whole file and
+writes nothing:
+
+```bash
+npm run import -- employees data/staff.csv --dry-run
+```
+
+It reports every problem with its line number:
+
+```
+  line 3: first_name and last_name are required
+  line 4: group "NOSUCHGROUP" doesn't exist — add it first, or check the spelling
+  line 5: role "superuser" must be admin, group_it_coordinator or employee
+
+  would add: 2   already present: 0   rejected: 4
+```
+
+Three things that make a large import survivable:
+
+- **A bad row doesn't stop the run.** One typo on row 400 doesn't cost you the
+  other 399 — the good rows load and the rest are listed for fixing.
+- **Nothing is overwritten.** A person or asset that already exists is skipped,
+  never updated. So after fixing the rejected lines you re-run the same file and
+  only the missing rows are added.
+- **Assets can carry their holder.** Put an employee's email in the
+  `assigned_to` column and the custody record is created with the asset, which
+  is the part of a paper register that actually matters. Import people first,
+  hardware second.
+
+Everyone imported starts on the password in `DEFAULT_PASSWORD`, and signs in
+with their email address.
+
+### Which method for which job
+
+| Situation | Use |
+|---|---|
+| Moving existing records into the system | **CSV import** |
+| A new joiner, a newly purchased laptop | **The app** — Employees / Assets → Add |
+| Rebuilding the demo from scratch | `npm run setup` |
+| A correction to one record | **The app** — the pencil icon |
+
+Groups, cadres and designations are referred to by their short names (`AI`,
+`SD`, `TECH`) rather than internal IDs, because those are what a spreadsheet
+will realistically contain. They must exist before the rows that reference them
+— they're created by `backend/sql/02_seed.sql`, which is where to add your real
+group list.
+
+---
+
 ## Where the accounts and demo data live
 
 **Accounts are rows in the `employees` table in PostgreSQL.** Nowhere else.

@@ -2,7 +2,7 @@
   "name": "employee-inventory-management",
   "private": true,
   "version": "1.0.0",
-  "description": "Employee Inventory Management — root scripts for building and running both halves together.",
+  "description": "Employee Inventory Management \u2014 root scripts for building and running both halves together.",
   "engines": {
     "node": ">=18"
   },
@@ -12,16 +12,22 @@
     "no Node toolchain on PATH and the build dies with 'command not found'",
     "(exit status 127) before it reaches frontend/ or backend/.",
     "",
-    "The scripts use `cd` rather than `npm --prefix`. --prefix changes the",
-    "working directory but does not put that package's node_modules/.bin on",
-    "PATH, so `npm --prefix frontend run build` fails with 'vite: not found'.",
+    "The frontend install passes --include=dev deliberately. Hosting providers",
+    "export NODE_ENV=production during the BUILD as well as at runtime, and",
+    "under that npm omits devDependencies \u2014 which is where vite lives. Without",
+    "the flag the install silently succeeds and the very next line fails with",
+    "'vite: not found'. The backend install has no such need: nothing it uses",
+    "at runtime is a devDependency.",
     "",
     "Order matters: the frontend must be built before the backend starts,",
     "because the backend serves frontend/dist and only looks for it at",
-    "start-up."
+    "start-up.",
+    "",
+    "To reproduce a hosted build locally, set NODE_ENV=production first \u2014 a",
+    "plain clean clone does not exercise the same code path."
   ],
   "scripts": {
-    "build": "cd frontend && npm ci && npm run build && cd ../backend && npm ci",
+    "build": "cd frontend && npm ci --include=dev && npm run build && cd ../backend && npm ci",
     "start": "cd backend && npm run setup && npm start",
     "test": "cd backend && npm test"
   }

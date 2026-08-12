@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Employee Inventory Management API — Express + PostgreSQL, runs fully offline.",
+  "description": "Employee Inventory Management API \u2014 Express + PostgreSQL, runs fully offline.",
   "engines": {
     "node": ">=18"
   },

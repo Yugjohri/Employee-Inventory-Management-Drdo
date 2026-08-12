@@ -42,6 +42,11 @@ services:
       # the policies apply to the owner as well. Both routes end up enforced;
       # see backend/src/dbConfig.js.
 
+      # Pin the toolchain. Left unset, Render resolves the newest Node it has,
+      # which drifted to 26.x against a Vite 5 build — untested together.
+      - key: NODE_VERSION
+        value: "22"
+
       # Signs the session cookie. Generated once by Render and kept secret.
       - key: JWT_SECRET
         generateValue: true

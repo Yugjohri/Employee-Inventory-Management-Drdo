@@ -12,14 +12,17 @@
     "no Node toolchain on PATH and the build dies with 'command not found'",
     "(exit status 127) before it reaches frontend/ or backend/.",
     "",
-    "It also gives one command for the whole system, which is easier to get",
-    "right than a chain of cd's: the frontend must be built before the backend",
-    "starts, because the backend serves frontend/dist and only looks for it at",
+    "The scripts use `cd` rather than `npm --prefix`. --prefix changes the",
+    "working directory but does not put that package's node_modules/.bin on",
+    "PATH, so `npm --prefix frontend run build` fails with 'vite: not found'.",
+    "",
+    "Order matters: the frontend must be built before the backend starts,",
+    "because the backend serves frontend/dist and only looks for it at",
     "start-up."
   ],
   "scripts": {
-    "build": "npm --prefix frontend ci && npm --prefix frontend run build && npm --prefix backend ci",
-    "start": "npm --prefix backend run setup && npm --prefix backend start",
-    "test": "npm --prefix backend test"
+    "build": "cd frontend && npm ci && npm run build && cd ../backend && npm ci",
+    "start": "cd backend && npm run setup && npm start",
+    "test": "cd backend && npm test"
   }
 }

@@ -16,7 +16,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 
 import { config } from "./config.js";
-import { pool } from "./db.js";
+import { pool, assertSecurityRulesApply } from "./db.js";
 import { authenticate } from "./auth.js";
 import { errorHandler, notFound } from "./http.js";
 
@@ -75,9 +75,32 @@ const runDirectly =
   process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (runDirectly) {
-  app.listen(config.port, () => {
+  app.listen(config.port, async () => {
     console.log(`[api] listening on http://localhost:${config.port}`);
-    console.log(`[api] database ${config.db.user}@${config.db.host}:${config.db.port}/${config.db.database}`);
     if (fs.existsSync(clientDir)) console.log("[api] serving frontend from frontend/dist");
+
+    try {
+      const check = await assertSecurityRulesApply();
+      if (check.ok) {
+        console.log(`[api] database connected as "${check.who}" — access rules apply`);
+      } else {
+        console.error(
+          [
+            "",
+            "  ============================================================",
+            "   WARNING: row-level security is NOT in effect",
+            `   ${check.reason}`,
+            "",
+            "   Every role would be able to read every group's records.",
+            "   The API must connect as an unprivileged role that does not",
+            "   own the tables — see backend/src/dbConfig.js.",
+            "  ============================================================",
+            "",
+          ].join("\n")
+        );
+      }
+    } catch (error) {
+      console.error("[api] could not reach the database:", error.message);
+    }
   });
 }

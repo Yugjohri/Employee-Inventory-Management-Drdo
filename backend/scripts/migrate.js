@@ -3,9 +3,15 @@
  *
  *   npm run migrate
  *
- * Connects as ADMIN_PGUSER because creating tables and roles needs owner
- * rights. The API itself never uses this login — it connects as eims_app,
- * which owns nothing and is therefore subject to row-level security.
+ * Connects as the database owner, because creating tables and roles needs
+ * owner rights. The API itself never uses this login — it connects as
+ * `eims_app`, which owns nothing and is therefore subject to row-level
+ * security. See src/dbConfig.js.
+ *
+ * Works in both shapes:
+ *   locally  creates the database, then applies the schema
+ *   hosted   the provider already created the database, so that step is
+ *            skipped and the schema is applied to it
  */
 
 import fs from "node:fs/promises";
@@ -15,22 +21,23 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import "dotenv/config";
 
+import { ownerConnection, usingDatabaseUrl } from "../src/dbConfig.js";
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const sqlDir = path.resolve(here, "../sql");
-
-const adminConfig = {
-  host: process.env.PGHOST || "localhost",
-  port: Number(process.env.PGPORT || 5432),
-  user: process.env.ADMIN_PGUSER || "postgres",
-  password: process.env.ADMIN_PGPASSWORD || "postgres",
-};
 
 const dbName = process.env.PGDATABASE || "eims";
 const appUser = process.env.PGUSER || "eims_app";
 const appPassword = process.env.PGPASSWORD || "";
 
+/** Only meaningful for a local install; a hosted database already exists. */
 async function ensureDatabase() {
-  const client = new pg.Client({ ...adminConfig, database: "postgres" });
+  if (usingDatabaseUrl) {
+    console.log("[migrate] using DATABASE_URL — the database already exists");
+    return;
+  }
+
+  const client = new pg.Client(ownerConnection("postgres"));
   await client.connect();
   try {
     const { rows } = await client.query("select 1 from pg_database where datname = $1", [dbName]);
@@ -47,7 +54,7 @@ async function ensureDatabase() {
 }
 
 async function applySqlFiles() {
-  const client = new pg.Client({ ...adminConfig, database: dbName });
+  const client = new pg.Client(ownerConnection());
   await client.connect();
 
   try {
@@ -57,6 +64,13 @@ async function applySqlFiles() {
       const sql = await fs.readFile(path.join(sqlDir, file), "utf8");
       await client.query(sql);
       console.log(`[migrate] applied ${file}`);
+
+      // 01_schema.sql defines set_app_user and turns on row-level security.
+      // Everything after it — the reference data in 02_seed.sql — is an
+      // ordinary write and has to say who it is, or the policies reject it.
+      if (file.startsWith("01_")) {
+        await client.query("select set_config('app.role', 'admin', false)");
+      }
     }
 
     if (!appPassword) {
@@ -83,13 +97,16 @@ try {
 } catch (error) {
   console.error("\n[migrate] failed:", error.message);
   if (error.code === "ECONNREFUSED") {
-    console.error(
-      "  PostgreSQL doesn't appear to be running on " +
-        `${adminConfig.host}:${adminConfig.port}. Start it and try again.`
-    );
+    console.error("  PostgreSQL doesn't appear to be running. Start it and try again.");
   }
   if (error.code === "28P01") {
-    console.error("  ADMIN_PGUSER / ADMIN_PGPASSWORD in backend/.env were rejected.");
+    console.error("  The database password was rejected. Check ADMIN_PGPASSWORD in backend/.env.");
+  }
+  if (error.code === "42501") {
+    console.error(
+      "  Permission denied. On a managed host the DATABASE_URL user may not be\n" +
+        "  allowed to create roles — see the hosting section of README.md."
+    );
   }
   process.exit(1);
 }

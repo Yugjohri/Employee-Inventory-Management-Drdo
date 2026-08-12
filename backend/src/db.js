@@ -13,15 +13,17 @@
  */
 
 import pg from "pg";
-import { config } from "./config.js";
+import { appConnection } from "./dbConfig.js";
 
 // Dates come back as 'YYYY-MM-DD' strings rather than JS Date objects.
 // Without this, `date` columns get shifted across timezone boundaries on the
 // way to JSON — an assignment dated the 1st arrives at the browser as the 31st.
 pg.types.setTypeParser(1082, (value) => value);
 
+// Always the unprivileged role — see dbConfig.js for why that matters even
+// when a hosting provider hands us an owner connection string.
 export const pool = new pg.Pool({
-  ...config.db,
+  ...appConnection(),
   max: 10,
   idleTimeoutMillis: 30_000,
 });
@@ -29,6 +31,33 @@ export const pool = new pg.Pool({
 pool.on("error", (err) => {
   console.error("[db] idle client error:", err.message);
 });
+
+/**
+ * Check at start-up that the access rules will actually apply to us.
+ *
+ * PostgreSQL exempts a table's owner — and any role with BYPASSRLS — from that
+ * table's row-level security. If a deployment accidentally connects with such a
+ * user, every query still succeeds and every page still renders; the only
+ * difference is that a coordinator can now see every group. That is precisely
+ * the kind of failure nobody notices, so it's worth one query to rule out.
+ */
+export async function assertSecurityRulesApply() {
+  const { rows } = await pool.query(`
+    select current_user as who,
+           (select rolbypassrls from pg_roles where rolname = current_user) as bypasses,
+           pg_catalog.pg_get_userbyid(c.relowner) = current_user as owns_employees
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relname = 'employees'
+  `);
+
+  const state = rows[0];
+  if (!state) return { ok: false, reason: "the employees table is missing — run npm run setup" };
+  if (state.bypasses) return { ok: false, reason: `"${state.who}" has BYPASSRLS` };
+  if (state.owns_employees) return { ok: false, reason: `"${state.who}" owns the tables` };
+
+  return { ok: true, who: state.who };
+}
 
 /**
  * Run `fn` with the session bound to `user`, inside one transaction.

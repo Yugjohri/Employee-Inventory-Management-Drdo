@@ -374,35 +374,138 @@ moves between machines with `pg_dump` / `pg_restore`.
 
 ---
 
-## Deploying on the intranet
+## Deployment
 
-For a single-machine deployment, Express serves the built frontend, so there is
-one process plus PostgreSQL:
+Two ways to run this, for two different purposes. **Option A is the real one**
+— it is what DRDO needs and what the application was designed for. Option B is
+a public copy for showing people who aren't on the network.
+
+---
+
+### Option A — Intranet hosting (what DRDO actually needs)
+
+This is real hosting, it's free, and the application already supports it.
+
+**How it works:** run it on one PC on the DRDO network. Everyone else opens it
+in their browser using that machine's address. Nothing leaves the network and
+no internet is involved.
+
+**Advantages:** free forever, no internet needed, data never leaves DRDO, no
+third party, no cold starts — and it is what the architecture was built for.
+
+**Disadvantages:** you maintain the machine; it is reachable only inside the
+network; backups are your responsibility (`pg_dump`).
+
+#### Steps
+
+**1. Pick a machine that stays switched on.** Install PostgreSQL and Node on it
+and deploy the application exactly as in [Quick start](#quick-start) above.
+Then start it in production mode:
 
 ```bash
 cd frontend && npm ci && npm run build     # writes frontend/dist
 cd ../backend && npm ci && npm run setup
-NODE_ENV=production npm start              # serves API + app on port 4000
+set NODE_ENV=production && npm start       # Linux/macOS: NODE_ENV=production npm start
 ```
 
-The whole system is then at `http://<server>:4000`.
+One process now serves both the API and the application on port 4000.
 
-Before going live:
+**2. Find that machine's address.** Open Command Prompt and run:
+
+```
+ipconfig
+```
+
+Look for **IPv4 Address** — something like `10.0.5.23`. That is the address
+colleagues will use. Ask IT to reserve it, so it doesn't change.
+
+**3. Open port 4000 in Windows Firewall.** Without this, the application works
+on the server itself but nobody else can reach it. In an Administrator command
+prompt:
+
+```
+netsh advfirewall firewall add rule name="Employee Inventory" dir=in action=allow protocol=TCP localport=4000
+```
+
+**4. Tell everyone the address.** They browse to:
+
+```
+http://10.0.5.23:4000
+```
+
+(substituting the address from step 2). Nothing needs installing on their
+machines — a browser is enough.
+
+#### Optional polish
+
+- **Start automatically on boot.** As set up above, the application stops when
+  whoever started it logs out. Registering it as a Windows Service with
+  [NSSM](https://nssm.cc) makes it start with the machine and survive reboots
+  with nobody logged in.
+- **A proper name instead of an IP.** Ask IT for a DNS entry so people can use
+  `http://inventory.drdo.local` rather than remembering numbers.
+- **Drop the `:4000`.** Set `PORT=80` in `backend/.env` so the address is just
+  `http://inventory.drdo.local`. Port 80 may require running as Administrator.
+
+#### Before going live
 
 1. **Change every demo password**, or delete the demo accounts outright.
 2. Set a fresh `JWT_SECRET`. Anyone who knows it can mint an admin session.
 3. Set a real `PGPASSWORD` for the `eims_app` login.
-4. If you put it behind HTTPS, the session cookie sets `Secure` automatically
-   when `NODE_ENV=production`. Over plain HTTP on an isolated network it stays
-   off, because a `Secure` cookie would never be sent at all.
-5. Back up the database — `pg_dump eims > backup.sql`.
+4. Over plain HTTP on an isolated network the session cookie is not marked
+   `Secure` — correct, because a `Secure` cookie would never be sent at all.
+   Behind HTTPS it is set automatically when `NODE_ENV=production`.
+5. Schedule a backup — `pg_dump eims > backup.sql`.
 
-### Installing without internet
+#### Installing without internet
 
 `npm ci` is the only step that needs the network. To install on an air-gapped
 machine, run `npm ci` in `backend/` and `frontend/` on a machine that has
 internet, then copy both `node_modules` directories across along with the code.
 Node and PostgreSQL installers must likewise be carried over.
+
+---
+
+### Option B — Render (a public demo copy)
+
+For sending someone a link when they aren't on the DRDO network. Free.
+
+> **Keep the fake seed data.** This puts the application on the public
+> internet, which is the opposite of the intranet requirement. It is fine for a
+> demonstration with invented people; never put real personnel records on it.
+
+`render.yaml` in the repository root describes the whole deployment, so Render
+sets it up without manual configuration.
+
+1. Sign up at [render.com](https://render.com) with your GitHub account.
+2. **New → Blueprint**, and choose this repository.
+3. Render reads `render.yaml` and shows a web service plus a PostgreSQL
+   database. Click **Apply**.
+4. Wait for the first build (a few minutes — it installs, builds the frontend,
+   creates the schema and seeds the demo data).
+5. Open the `.onrender.com` address it gives you and sign in as usual.
+
+Everything else — passwords, the database URL, the session secret — Render
+generates and injects. There is nothing to configure by hand.
+
+**Things to know about the free tier:**
+
+- The service **sleeps after about 15 minutes idle**, so the first visit after a
+  quiet period takes 30–60 seconds to wake. Open it yourself a minute before
+  showing anyone.
+- Free databases are time-limited; check Render's current terms.
+- Pushing to `main` redeploys automatically.
+
+**One thing worth understanding.** Render's database gives you a connection
+string for the user that *owns* the tables, and PostgreSQL exempts a table's
+owner from its own row-level security. Connecting the API with it would leave
+the application looking perfectly normal while every access rule silently
+stopped applying — a coordinator would be able to see every group.
+
+So the API always connects as the unprivileged `eims_app` role instead, hosted
+or not (`backend/src/dbConfig.js`). The server also checks this at start-up and
+prints a loud warning if the rules would not apply, so the mistake cannot go
+unnoticed.
 
 ---
 

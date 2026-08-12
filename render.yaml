@@ -1,0 +1,65 @@
+# Render deployment blueprint.
+#
+# Render reads this file when you create a "Blueprint" from the repository and
+# provisions everything described here — the web service and its database —
+# without any manual configuration.
+#
+# This is for a PUBLIC demo copy of the application. The DRDO deployment runs
+# on the intranet with no internet access; see the Deployment section of
+# README.md. Do not put real personnel records on a hosted service.
+
+services:
+  - type: web
+    name: employee-inventory
+    runtime: node
+    plan: free
+    # Singapore is Render's closest region to India.
+    region: singapore
+
+    # The backend serves the built frontend, so the frontend must be built
+    # first — the server only looks for frontend/dist at start-up.
+    buildCommand: cd frontend && npm ci && npm run build && cd ../backend && npm ci
+
+    # `npm run setup` applies the schema and seeds the demo data. Both are
+    # idempotent, so running them on every boot is safe: the first deploy
+    # creates everything, later ones confirm it's all still there.
+    startCommand: cd backend && npm run setup && npm start
+
+    healthCheckPath: /api/health
+
+    envVars:
+      # The database below, injected by Render.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: employee-inventory-db
+          property: connectionString
+
+      # The API deliberately does NOT connect with the DATABASE_URL user.
+      # That user owns the tables, and PostgreSQL exempts a table's owner from
+      # its own row-level security — connecting as it would silently disable
+      # every access rule. So we connect as `eims_app`, which owns nothing.
+      # See backend/src/dbConfig.js.
+      - key: PGUSER
+        value: eims_app
+      - key: PGPASSWORD
+        generateValue: true
+
+      # Signs the session cookie. Generated once by Render and kept secret.
+      - key: JWT_SECRET
+        generateValue: true
+
+      # Makes the session cookie Secure, which is correct here because Render
+      # serves over HTTPS. It stays off for plain-HTTP intranet deployments.
+      - key: NODE_ENV
+        value: production
+
+      # Password for the seeded demo accounts. Change it here if you'd rather
+      # the public copy didn't use the one documented in the README.
+      - key: DEFAULT_PASSWORD
+        value: drdo@1234
+
+databases:
+  - name: employee-inventory-db
+    plan: free
+    region: singapore
+    databaseName: eims

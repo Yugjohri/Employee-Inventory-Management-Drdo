@@ -31,6 +31,8 @@ import bcrypt from "bcryptjs";
 import pg from "pg";
 import "dotenv/config";
 
+import { ownerConnection } from "../src/dbConfig.js";
+
 const password = process.env.DEFAULT_PASSWORD || "drdo@1234";
 
 /**
@@ -315,6 +317,12 @@ async function seedRequests() {
 
 try {
   await client.connect();
+
+  // Identify as an administrator for the rest of this session. Without it the
+  // row-level policies reject these inserts — which is the system working as
+  // intended; the seed simply has to say who it is.
+  await client.query("select set_config('app.role', 'admin', false)");
+
   await seedPeople();
   await seedAssets();
   await seedAssignments();

@@ -194,9 +194,13 @@ group's rows — the query returns nothing. The API applies no group filter of i
 own anywhere; it doesn't need to, and that's deliberate. If a route were ever
 written carelessly, the database would still refuse.
 
-The API connects as `eims_app`, a login that owns no tables. This is load-bearing:
-PostgreSQL exempts a table's *owner* from its own security policies, so
-connecting as the owner would silently disable every rule.
+One detail is load-bearing: PostgreSQL exempts a table's *owner* from its own
+security policies. On a local install the API therefore connects as `eims_app`,
+a login that owns nothing. Where that role can't be created — managed databases
+hand you a single login that owns everything — the tables are marked
+`FORCE ROW LEVEL SECURITY` instead, which removes the exemption. The server
+checks which of the two applies at start-up and says so in its first log line,
+rather than assuming.
 
 `npm test` in `backend/` verifies this, including the cases someone would
 actually try — reading another group's record by its id, replaying an admin
@@ -534,42 +538,91 @@ Node and PostgreSQL installers must likewise be carried over.
 
 For sending someone a link when they aren't on the DRDO network. Free.
 
+Currently deployed at <https://employee-inventory.onrender.com>
+
 > **Keep the fake seed data.** This puts the application on the public
 > internet, which is the opposite of the intranet requirement. It is fine for a
 > demonstration with invented people; never put real personnel records on it.
 
-`render.yaml` in the repository root describes the whole deployment, so Render
-sets it up without manual configuration.
+`render.yaml` in the repository root describes the whole deployment — the web
+service, the database, and every environment variable — so Render provisions it
+without manual configuration.
+
+#### Deploying it
 
 1. Sign up at [render.com](https://render.com) with your GitHub account.
 2. **New → Blueprint**, and choose this repository.
 3. Render reads `render.yaml` and shows a web service plus a PostgreSQL
    database. Click **Apply**.
-4. Wait for the first build (a few minutes — it installs, builds the frontend,
-   creates the schema and seeds the demo data).
+4. Wait for the first build — a few minutes. It installs both halves, builds
+   the frontend, creates the schema and seeds the demo data.
 5. Open the `.onrender.com` address it gives you and sign in as usual.
 
-Everything else — passwords, the database URL, the session secret — Render
-generates and injects. There is nothing to configure by hand.
+Passwords, the database URL and the session secret are all generated and
+injected by Render. There is nothing to fill in by hand.
 
-**Things to know about the free tier:**
+#### Checking it actually worked
+
+A deploy can go green while the application is subtly wrong, so check three
+things rather than one:
+
+```bash
+curl https://<your-app>.onrender.com/api/health
+# {"status":"ok","database":"connected"}
+```
+
+Then in **Logs**, look for this line:
+
+```
+[api] database connected as "..." (owner, with FORCE) — access rules apply
+```
+
+That confirms the database is enforcing the access rules. If instead you see a
+`WARNING: row-level security is NOT in effect` banner, stop — every role would
+be able to read every group.
+
+Finally, sign in as `itcoordinator1@company.com`, then as
+`itcoordinator2@company.com`. Each should see their own group's staff and not
+the other's. If both see all 21 people, the rules aren't applying.
+
+#### Redeploying
+
+- **Code changes** — push to `main` and Render redeploys automatically.
+- **Changes to `render.yaml`** — these need **Manual sync** on the blueprint
+  page; a normal redeploy won't pick up new environment variables or commands.
+
+The start command re-runs the migration on every boot. That is safe: both the
+schema and the seed are written to be re-appliable, and re-seeding an existing
+database adds nothing and changes nothing.
+
+#### Things to know about the free tier
 
 - The service **sleeps after about 15 minutes idle**, so the first visit after a
   quiet period takes 30–60 seconds to wake. Open it yourself a minute before
   showing anyone.
 - Free databases are time-limited; check Render's current terms.
-- Pushing to `main` redeploys automatically.
 
-**One thing worth understanding.** Render's database gives you a connection
-string for the user that *owns* the tables, and PostgreSQL exempts a table's
-owner from its own row-level security. Connecting the API with it would leave
-the application looking perfectly normal while every access rule silently
-stopped applying — a coordinator would be able to see every group.
+#### How the access rules survive a managed database
 
-So the API always connects as the unprivileged `eims_app` role instead, hosted
-or not (`backend/src/dbConfig.js`). The server also checks this at start-up and
-prints a loud warning if the rules would not apply, so the mistake cannot go
-unnoticed.
+Worth understanding, because it is the one part that does not carry over
+unchanged — and it fails silently if it is got wrong.
+
+PostgreSQL exempts a table's **owner** from that table's row-level security.
+Locally we avoid the problem by connecting as `eims_app`, a role that owns
+nothing. A managed database won't let you create roles: you get one login, and
+it owns everything.
+
+So the schema marks every table `FORCE ROW LEVEL SECURITY`, which removes the
+owner's exemption. Both arrangements end up enforced:
+
+| | The API connects as | What enforces the rules |
+|---|---|---|
+| Local install | `eims_app`, owns nothing | ordinary row-level security |
+| Render | the `DATABASE_URL` owner | row-level security **+ FORCE** |
+
+`backend/src/dbConfig.js` decides between them, and the server checks the
+result at start-up rather than trusting it — which is what the log line above
+is reporting.
 
 ---
 
